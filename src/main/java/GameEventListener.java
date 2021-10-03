@@ -50,7 +50,6 @@ public class GameEventListener implements GLEventListener {
     };
 
 
-
     private float[] colorData = {
             1, 0, 0,
     };
