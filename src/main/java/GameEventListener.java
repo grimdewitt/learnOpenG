@@ -9,10 +9,14 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.*;
+
+import static com.jogamp.opengl.GL.GL_ELEMENT_ARRAY_BUFFER;
+import static com.jogamp.opengl.GL.GL_STATIC_DRAW;
 
 public class GameEventListener implements GLEventListener {
     public static float sizeOfHex = 0.1f;
@@ -32,7 +36,8 @@ public class GameEventListener implements GLEventListener {
     public static float eyeZ = 0;
 
     int[] elements = {
-            0, 1, 2
+            0, 1, 2,
+            2, 3, 0
     };
 
 
@@ -44,25 +49,27 @@ public class GameEventListener implements GLEventListener {
 
 
     float[] vertices = {
-            0.0f,  0.5f, 1.0f, 0.0f, 0.0f, // Vertex 1: Red
-            0.5f, -0.5f, 0.0f, 1.0f, 0.0f, // Vertex 2: Green
-            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f  // Vertex 3: Blue
+            -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, // Top-left
+            0.5f,  0.5f, 0.0f, 1.0f, 0.0f, // Top-right
+            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, // Bottom-right
+            -0.5f, -0.5f, 1.0f, 1.0f, 1.0f  // Bottom-left
     };
 
-
-    private float[] colorData = {
-            1, 0, 0,
-    };
 
     int uniColor;
 
 
     FloatBuffer vertexFB = FloatBuffer.wrap(vertices);
-    FloatBuffer colorFB = FloatBuffer.wrap(colorData);
+    IntBuffer elementB = IntBuffer.wrap(elements);
 
-    IntBuffer buffers = IntBuffer.allocate(2);
+    //vbo
+    IntBuffer buffers = IntBuffer.allocate(1);
+    //vao
     IntBuffer vertexArray = IntBuffer.allocate(1);
-
+    //ea
+    IntBuffer elementArray = IntBuffer.allocate(1);
+    //tex data
+    IntBuffer texArray = IntBuffer.allocate(1);
 
     //Инициализация gl2 для рисования и выбор цвета фона
     public void init(GLAutoDrawable glAutoDrawable) {
@@ -158,7 +165,7 @@ public class GameEventListener implements GLEventListener {
         uniColor = gl2.glGetUniformLocation(program, "triangleColor");
 
         ///
-        gl2.glGenBuffers(2, buffers);
+        gl2.glGenBuffers(1, buffers);
 
         // Create Vertex Array.
         gl2.glGenVertexArrays(1, vertexArray);
@@ -177,9 +184,35 @@ public class GameEventListener implements GLEventListener {
         gl2.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(1));
         gl2.glBufferData(GL2.GL_ARRAY_BUFFER, vertexFB.capacity()*Float.BYTES, vertexFB, GL2.GL_STREAM_DRAW);
         gl2.glVertexAttribPointer(1, 3, GL.GL_FLOAT, false, 0, 0);
-*/
+        */
+
+        //vbo
         gl2.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
-        gl2.glBufferData(GL2.GL_ARRAY_BUFFER, vertexFB.capacity()* Float.BYTES, vertexFB, GL2.GL_STATIC_DRAW);
+        gl2.glBufferData(GL2.GL_ARRAY_BUFFER, vertexFB.capacity()* Float.BYTES, vertexFB, GL_STATIC_DRAW);
+
+        /*//tex
+        gl2.glGenBuffers(1, texArray);
+        gl2.glBindTexture(GL2.GL_TEXTURE_2D, texArray.get(0));
+
+        //wrap texture
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_S, GL2.GL_REPEAT);
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_T, GL2.GL_REPEAT);
+
+        //filtering - linear
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D,GL2.GL_TEXTURE_MIN_FILTER, GL2.GL_LINEAR);
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_MAG_FILTER, GL2.GL_LINEAR);*/
+
+        //color
+        /*float color[] = { 1.0f, 0.0f, 0.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);*/
+
+
+
+        //ve
+        gl2.glGenBuffers(1, elementArray);
+        gl2.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementArray.get(0));
+        gl2.glBufferData(GL_ELEMENT_ARRAY_BUFFER, elementB.capacity()* Integer.BYTES, elementB, GL_STATIC_DRAW);
+
 
         int posAttrib = gl2.glGetAttribLocation(program, "position");
         gl2.glEnableVertexAttribArray(posAttrib);
@@ -234,7 +267,8 @@ public class GameEventListener implements GLEventListener {
         gl2.glUseProgram(program);
         gl2.glBindVertexArray(vertexArray.get(0));
         //gl2.glDrawElements(GL2.GL_TRIANGLES, 3, GL2.GL_UNSIGNED_INT, 0);
-        gl2.glDrawArrays(GL.GL_TRIANGLES, 0, 3);
+        gl2.glDrawElements(GL2.GL_TRIANGLES, 6, GL2.GL_UNSIGNED_INT, 0);
+        //gl2.glDrawArrays(GL.GL_TRIANGLES, 0, 3);
 
         //Uniforms
         //gl2.glUniform3f(uniColor, 1.0f, 0.0f, 0.0f);
