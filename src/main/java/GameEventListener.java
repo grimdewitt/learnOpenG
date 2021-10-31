@@ -2,6 +2,9 @@ import com.jogamp.opengl.*;
 import com.jogamp.opengl.awt.GLCanvas;
 import com.jogamp.opengl.glu.GLU;
 import com.jogamp.opengl.util.awt.AWTGLReadBufferUtil;
+import com.jogamp.opengl.util.texture.Texture;
+import com.jogamp.opengl.util.texture.TextureData;
+import com.jogamp.opengl.util.texture.TextureIO;
 import com.sun.corba.se.pept.transport.InboundConnectionCache;
 import javafx.geometry.Point2D;
 
@@ -9,11 +12,14 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.jogamp.opengl.GL.GL_ELEMENT_ARRAY_BUFFER;
 import static com.jogamp.opengl.GL.GL_STATIC_DRAW;
@@ -37,24 +43,23 @@ public class GameEventListener implements GLEventListener {
 
     int[] elements = {
             0, 1, 2,
-            2, 3, 0
+            2, 3, 0,
+            4,5,6,
+            6,7,4
     };
-
-
-    /*float vertices[] = {
-            0.0f,  0.5f, // Vertex 1 (X, Y)
-            0.5f, -0.5f, // Vertex 2 (X, Y)
-            -0.5f, -0.5f  // Vertex 3 (X, Y)
-    };*/
-
 
     float[] vertices = {
-            -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, // Top-left
-            0.5f,  0.5f, 0.0f, 1.0f, 0.0f, // Top-right
-            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, // Bottom-right
-            -0.5f, -0.5f, 1.0f, 1.0f, 1.0f  // Bottom-left
-    };
+            //  Position      Color             Texcoords
+            -0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // Top-left
+            0.5f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, // Top-right
+            0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // Bottom-right
+            -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,  // Bottom-left
 
+            -0.1f, 0.1f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, // Top-left
+            0.1f, 0.1f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, // Top-right
+            0.1f, -0.1f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, // Bottom-right
+            -0.1f, -0.1f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f  // Bottom-left
+    };
 
     int uniColor;
 
@@ -82,47 +87,50 @@ public class GameEventListener implements GLEventListener {
         gl2.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
 
-// Create program.
+        // Create program.
         program = gl2.glCreateProgram();
 
-// Create vertexShader.
+        // Create vertexShader.
         int vertexShader = gl2.glCreateShader(GL2ES2.GL_VERTEX_SHADER);
         String[] vertexShaderSource = new String[1];
         vertexShaderSource[0] = "#version 330\n" +
                 "in vec2 position;\n" +
+                "in vec2 texcoord;\n" +
                 "in vec3 color;" +
                 "out vec3 Color;" +
+                "out vec2 Texcoord;\n" +
                 "void main(void)\n" +
                 "{\n" +
+                "Texcoord = texcoord;\n" +
                 "Color = color;\n" +
-                "gl_Position = vec4(position, 0.0, 1.0);\n"+
+                "gl_Position = vec4(position, 0.0, 1.0);\n" +
                 "}\n";
         gl2.glShaderSource(vertexShader, 1, vertexShaderSource, null);
         gl2.glCompileShader(vertexShader);
 
-// Create and fragment shader.
+        // Create and fragment shader.
         int fragmentShader = gl2.glCreateShader(GL2ES2.GL_FRAGMENT_SHADER);
         String[] fragmentShaderSource = new String[1];
         fragmentShaderSource[0] = "#version 330\n" +
                 "uniform vec3 triangleColor;\n" +
-                "in vec3 Color;;\n" +
+                "uniform sampler2D tex;\n" +
+                "in vec3 Color;\n" +
+                "in vec2 Texcoord;\n" +
                 "out vec4 fColor;\n" +
                 "void main(void)\n" +
                 "{\n" +
-                "fColor = vec4(Color, 1.0);\n" +
+                "fColor = texture(tex, Texcoord)*vec4(Color, 1.0);\n" +
                 "}\n";
         gl2.glShaderSource(fragmentShader, 1, fragmentShaderSource, null);
         gl2.glCompileShader(fragmentShader);
-        //"fColor = vColor;\n" +
-
 
         //check if shaders compile successful
         IntBuffer intBuffer = IntBuffer.allocate(1);
 
-        gl2.glGetShaderiv(vertexShader,GL2.GL_COMPILE_STATUS,intBuffer);
-        System.out.println("glCompileShader(vertex)="+intBuffer.get(0));
+        gl2.glGetShaderiv(vertexShader, GL2.GL_COMPILE_STATUS, intBuffer);
+        System.out.println("glCompileShader(vertex)=" + intBuffer.get(0));
 
-        if(intBuffer.get(0)==GL.GL_FALSE){
+        if (intBuffer.get(0) == GL.GL_FALSE) {
             gl2.glGetProgramiv(program, GL2.GL_INFO_LOG_LENGTH, intBuffer);
             int size = intBuffer.get(0);
             if (size > 0) {
@@ -136,10 +144,10 @@ public class GameEventListener implements GLEventListener {
             }
         }
 
-        gl2.glGetShaderiv(fragmentShader,GL2.GL_COMPILE_STATUS,intBuffer);
-        System.out.println("glCompileShader(fragment)="+intBuffer.get(0));
+        gl2.glGetShaderiv(fragmentShader, GL2.GL_COMPILE_STATUS, intBuffer);
+        System.out.println("glCompileShader(fragment)=" + intBuffer.get(0));
 
-        if(intBuffer.get(0)==GL.GL_FALSE){
+        if (intBuffer.get(0) == GL.GL_FALSE) {
             gl2.glGetProgramiv(program, GL2.GL_INFO_LOG_LENGTH, intBuffer);
             int size = intBuffer.get(0);
             if (size > 0) {
@@ -162,7 +170,7 @@ public class GameEventListener implements GLEventListener {
         gl2.glAttachShader(program, fragmentShader);
         gl2.glLinkProgram(program);
 
-        uniColor = gl2.glGetUniformLocation(program, "triangleColor");
+        //uniColor = gl2.glGetUniformLocation(program, "triangleColor");
 
         ///
         gl2.glGenBuffers(1, buffers);
@@ -188,39 +196,90 @@ public class GameEventListener implements GLEventListener {
 
         //vbo
         gl2.glBindBuffer(GL2.GL_ARRAY_BUFFER, buffers.get(0));
-        gl2.glBufferData(GL2.GL_ARRAY_BUFFER, vertexFB.capacity()* Float.BYTES, vertexFB, GL_STATIC_DRAW);
+        gl2.glBufferData(GL2.GL_ARRAY_BUFFER, vertexFB.capacity() * Float.BYTES, vertexFB, GL_STATIC_DRAW);
 
-        /*//tex
+        //tex
         gl2.glGenBuffers(1, texArray);
         gl2.glBindTexture(GL2.GL_TEXTURE_2D, texArray.get(0));
 
         //wrap texture
-        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_S, GL2.GL_REPEAT);
-        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_T, GL2.GL_REPEAT);
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_S, GL2.GL_CLAMP_TO_BORDER);
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_WRAP_T, GL2.GL_CLAMP_TO_BORDER);
 
         //filtering - linear
-        gl2.glTexParameteri(GL2.GL_TEXTURE_2D,GL2.GL_TEXTURE_MIN_FILTER, GL2.GL_LINEAR);
-        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_MAG_FILTER, GL2.GL_LINEAR);*/
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_MIN_FILTER, GL2.GL_LINEAR);
+        gl2.glTexParameteri(GL2.GL_TEXTURE_2D, GL2.GL_TEXTURE_MAG_FILTER, GL2.GL_LINEAR);
+
+
+        //int width, height;
+
+        //upload
+
+        /*try {
+            img = ImageIO.read(new File("strawberry.jpg"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        width = img.getWidth();
+        height = img.getHeight();
+
+        gl2.glTextureImage2DEXT(GL2.GL_TEXTURE_2D, GL2.GL_RGB,width, height, 0, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, img);*/
+
+        TextureData data;
+        try {
+            URL texture = getClass().getClassLoader().getResource("sample.png");
+
+            System.out.println(texture);
+
+            /* Texture data is an object containing all the relevant information about texture.    */
+            if (texture != null) {
+                data = TextureIO.newTextureData(gl2.getGLProfile(), texture, false, TextureIO.PNG);
+                int level = 0;
+                {
+                    gl2.glTexImage2D(GL2.GL_TEXTURE_2D,
+                            level,
+                            data.getInternalFormat(),
+                            data.getWidth(), data.getHeight(),
+                            data.getBorder(),
+                            data.getPixelFormat(), data.getPixelType(),
+                            data.getBuffer());
+                }
+            }
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        /*try {
+            URL url = new URL(getCodeBase(), "examples/strawberry.jpg");
+            img = ImageIO.read(url);
+        } catch (IOException e) {
+        }*/
+
 
         //color
         /*float color[] = { 1.0f, 0.0f, 0.0f, 1.0f };
         glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);*/
 
 
-
         //ve
         gl2.glGenBuffers(1, elementArray);
         gl2.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementArray.get(0));
-        gl2.glBufferData(GL_ELEMENT_ARRAY_BUFFER, elementB.capacity()* Integer.BYTES, elementB, GL_STATIC_DRAW);
+        gl2.glBufferData(GL_ELEMENT_ARRAY_BUFFER, elementB.capacity() * Integer.BYTES, elementB, GL_STATIC_DRAW);
 
 
         int posAttrib = gl2.glGetAttribLocation(program, "position");
         gl2.glEnableVertexAttribArray(posAttrib);
-        gl2.glVertexAttribPointer(posAttrib, 2, GL2.GL_FLOAT, false, 5* Float.BYTES, 0);
+        gl2.glVertexAttribPointer(posAttrib, 2, GL2.GL_FLOAT, false, 7 * Float.BYTES, 0);
 
         int colAttrib = gl2.glGetAttribLocation(program, "color");
         gl2.glEnableVertexAttribArray(colAttrib);
-        gl2.glVertexAttribPointer(colAttrib, 3, GL2.GL_FLOAT, false, 5* Float.BYTES, 2* Float.BYTES);
+        gl2.glVertexAttribPointer(colAttrib, 3, GL2.GL_FLOAT, false, 7 * Float.BYTES, 2 * Float.BYTES);
+
+        int texAttrib = gl2.glGetAttribLocation(program, "texcoord");
+        gl2.glEnableVertexAttribArray(texAttrib);
+        gl2.glVertexAttribPointer(texAttrib, 2, GL2.GL_FLOAT, false, 7 * Float.BYTES, 5 * Float.BYTES);
 
         //image = new ImageResource("C://Users//korid//OneDrive//Desktop//unknown2.png");
         //System.out.println(image.getTexture());
@@ -229,7 +288,6 @@ public class GameEventListener implements GLEventListener {
     //Уничтожения
     public void dispose(GLAutoDrawable glAutoDrawable) {
     }
-
 
 
     //Отображние сетки
@@ -267,7 +325,7 @@ public class GameEventListener implements GLEventListener {
         gl2.glUseProgram(program);
         gl2.glBindVertexArray(vertexArray.get(0));
         //gl2.glDrawElements(GL2.GL_TRIANGLES, 3, GL2.GL_UNSIGNED_INT, 0);
-        gl2.glDrawElements(GL2.GL_TRIANGLES, 6, GL2.GL_UNSIGNED_INT, 0);
+        gl2.glDrawElements(GL2.GL_TRIANGLES, 12, GL2.GL_UNSIGNED_INT, 0);
         //gl2.glDrawArrays(GL.GL_TRIANGLES, 0, 3);
 
         //Uniforms
@@ -280,10 +338,7 @@ public class GameEventListener implements GLEventListener {
         //Обратное перемещение
 
 
-
-
         gl2.glTranslatef(eyeX, eyeY, eyeZ);
-
 
 
         gl2.glFlush();
